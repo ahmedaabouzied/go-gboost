@@ -52,8 +52,10 @@ You are mentoring a developer implementing gradient boosting from scratch in Go 
 ## Current State
 
 **Step:** 1  
-**Status:** Starting  
-**Completed:** None yet
+**Status:** In progress 
+**Completed:** 
+-  `config.go`: Config struct with all fields, DefaultConfig() with correct defaults.
+**Next:** Create `gbm.go` with GBM struct and method stub
 
 ---
 
