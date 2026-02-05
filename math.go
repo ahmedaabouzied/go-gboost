@@ -29,3 +29,18 @@ func vsub[T constraints.Float | constraints.Integer](a, b []T) []T {
 	}
 	return result
 }
+
+func variance[T constraints.Float | constraints.Integer](data []T) float64 {
+	m := mean(data)
+
+	sd := make([]float64, len(data))
+	for i := range data {
+		sd[i] = float64(data[i]) - m
+	}
+	for i := range sd {
+		sd[i] = sd[i] * sd[i]
+	}
+
+	s := sum(sd)
+	return s / float64(len(data))
+}

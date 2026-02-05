@@ -9,3 +9,98 @@ type Node struct {
 	Right        *Node   // Pointer to the right child. Will be nil for leaf nodes.
 	Value        float64 // The predicted value for a leaf node. The output basically for GBM.
 }
+
+type Split struct {
+	FeatureIndex int     // Feature column to split on
+	Threshold    float64 // The split value
+	LeftIndices  []int   // Row indices where X[i][FeatureIndex] < Threshold
+	RightIndices []int   // Row indices where X[i][FeatureIndex] >= Threshold
+	Gain         float64 // The variance reduction
+}
+
+func findBestSplit(X [][]float64, y []float64, indices []int, minSamplesLeaf int) *Split {
+	var bestSplit *Split
+	var bestGain float64 = 0.0
+
+	numFeatures := len(X[0])
+
+	parentVariance := variance(extractRows(y, indices))
+
+	for featureIndex := 0; featureIndex < numFeatures; featureIndex++ {
+		featureValues := extractFeatureValues(X, indices, featureIndex)
+		candidateThresholds := uniq(sort(featureValues))
+
+		for _, threshold := range candidateThresholds {
+			leftIndices, rightIndices := partition(X, indices, featureIndex, threshold)
+			if len(leftIndices) < minSamplesLeaf || len(rightIndices) < minSamplesLeaf {
+				continue
+			}
+			split := &Split{
+				FeatureIndex: featureIndex,
+				Threshold:    threshold,
+				LeftIndices:  leftIndices,
+				RightIndices: rightIndices,
+			}
+			gain := split.ComputeGain(y, indices, parentVariance)
+			if gain > bestGain {
+				bestGain = gain
+				bestSplit = split
+			}
+		}
+	}
+	return bestSplit
+}
+
+func (s *Split) ComputeGain(y []float64, indices []int, parentVariance float64) float64 {
+	n := len(indices)
+	nLeft := len(s.LeftIndices)
+	nRight := len(s.RightIndices)
+
+	leftVariance := variance(extractRows(y, s.LeftIndices))
+	rightVariance := variance(extractRows(y, s.RightIndices))
+
+	weightedChildVariance := (float64(nLeft)/float64(n))*leftVariance +
+		(float64(nRight)/float64(n))*rightVariance
+
+	gain := parentVariance - weightedChildVariance
+
+	return gain
+}
+
+func extractRows[T any](y []T, indices []int) []T {
+	res := make([]T, len(indices))
+	for j, i := range indices {
+		res[j] = y[i]
+	}
+	return res
+}
+
+func extractColumns[T any](X [][]T, indices []int) [][]T {
+	res := make([][]T, len(indices))
+	for j, i := range indices {
+		res[j] = X[i]
+	}
+	return res
+}
+
+func extractFeatureValues[T any](X [][]T, indices []int, featureIndex int) []T {
+	res := make([]T, len(indices))
+	for i, idx := range indices {
+		res[i] = X[idx][featureIndex]
+	}
+	return res
+}
+
+func partition(X [][]float64, indices []int, featureIndex int, threshold float64) (left, right []int) {
+	leftIndices := []int{}
+	rightIndices := []int{}
+
+	for _, idx := range indices {
+		if X[idx][featureIndex] < threshold {
+			leftIndices = append(leftIndices, idx)
+		} else {
+			rightIndices = append(rightIndices, idx)
+		}
+	}
+	return leftIndices, rightIndices
+}
