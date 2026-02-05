@@ -7,4 +7,5 @@ var (
 	ErrEmptyFeatures        = errors.New("empty features")
 	ErrLengthMismatch       = errors.New("mismatch length of input matrix")
 	ErrFeatureCountMismatch = errors.New("feature count mismatch")
+	ErrModelNotFitted       = errors.New("model not fitted")
 )
