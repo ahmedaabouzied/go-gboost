@@ -82,6 +82,8 @@ func createLossFunction(cfg Config) Loss {
 	switch cfg.Loss {
 	case "mse":
 		return &MSELoss{}
+	case "logloss":
+		return &LogLoss{}
 	default:
 		panic("unsupported loss function")
 	}

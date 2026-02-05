@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== GBoost Demo ===\n")
+	fmt.Println("=== GBoost Demo ===")
 
 	// Generate synthetic data: y = 2*x1 + 3*x2 + noise
 	n := 100
@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Training complete!\n")
+	fmt.Println("Training complete!")
 
 	// Evaluate on training data
 	trainPreds := gbm.Predict(XTrain)

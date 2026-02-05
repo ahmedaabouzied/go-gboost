@@ -1,5 +1,7 @@
 package gboost
 
+import "math"
+
 type Loss interface {
 	InitialPrediction(y []float64) float64
 	NegativeGradient(y, pred []float64) []float64
@@ -20,4 +22,21 @@ func (l *MSELoss) InitialPrediction(y []float64) float64 {
 // NegativeGradient returns (y - pred) (the residuals). Each tree in GBM fits these residuals, gradually correcting the model's errors
 func (l *MSELoss) NegativeGradient(y, pred []float64) []float64 {
 	return vsub(y, pred)
+}
+
+type LogLoss struct{}
+
+func (l *LogLoss) InitialPrediction(y []float64) float64 {
+	p := mean(y)
+	p = max(0.001, min(0.999, p)) // clip to safe range
+	logOdds := math.Log(p / (1 - p))
+	return logOdds
+}
+
+func (l *LogLoss) NegativeGradient(y, pred []float64) []float64 {
+	res := make([]float64, len(y))
+	for i := range y {
+		res[i] = y[i] - sigmoid(pred[i])
+	}
+	return res
 }
