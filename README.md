@@ -204,6 +204,23 @@ $$F_m(x) = F_{m-1}(x) + \eta \cdot h_m(x)$$
 
 This is the "slow learning" principle from Friedman (2001): taking many small steps in function space outperforms taking fewer large steps.
 
+### Feature Importance
+
+gboost computes **gain-based feature importance**, the standard method used by scikit-learn, XGBoost, and LightGBM. For each split in every tree, the variance reduction (gain) is weighted by the number of samples that reached that node:
+
+$$\text{importance}(j) = \sum_{\text{trees}} \sum_{\substack{\text{nodes where} \\ \text{feature} = j}} n_{\text{node}} \cdot \Delta_{\text{gain}}$$
+
+where $n_{\text{node}}$ is the number of training samples at that node and $\Delta_{\text{gain}}$ is the variance reduction from the split. The sample weighting ensures that splits higher in the tree (which affect more data) contribute proportionally more than splits deep in the tree. Without this weighting, a root split affecting 80 samples would count the same as a leaf split affecting 2 samples.
+
+After accumulating across all trees, importances are normalized to sum to 1.0:
+
+$$\text{importance}_{\text{normalized}}(j) = \frac{\text{importance}(j)}{\sum_{k} \text{importance}(k)}$$
+
+```go
+model.Fit(X, y)
+importance := model.FeatureImportance() // []float64, sums to 1.0
+```
+
 ### Subsampling
 
 When `SubsampleRatio < 1.0`, each tree is trained on a random subset of the training data. This introduces stochasticity that can reduce overfitting, as described in Friedman (2002).
@@ -235,6 +252,7 @@ func (g *GBM) Predict(X [][]float64) []float64         // Raw predictions (regre
 func (g *GBM) PredictSingle(x []float64) float64        // Raw prediction for one sample
 func (g *GBM) PredictProba(x []float64) float64          // P(y=1) for one sample (classification)
 func (g *GBM) PredictProbaAll(X [][]float64) []float64   // P(y=1) for all samples (classification)
+func (g *GBM) FeatureImportance() []float64               // Gain-based feature importance (sums to 1.0)
 func (g *GBM) Save(path string) error                    // Save model to JSON
 func Load(path string) (*GBM, error)                      // Load model from JSON
 ```
@@ -372,6 +390,17 @@ To validate correctness, gboost was benchmarked against scikit-learn's `Gradient
 | 18 | 0 | 0.0001 | 0.0002 | 0 |
 | 19 | 0 | 0.0002 | 0.0002 | 0 |
 
+### Feature Importance Comparison
+
+| Feature | gboost (Go) | scikit-learn (Python) |
+|---|---|---|
+| sepal_length | 0.0275 | 0.0093 |
+| sepal_width | 0.0175 | 0.0218 |
+| petal_length | 0.1285 | 0.1373 |
+| **petal_width** | **0.8266** | **0.8316** |
+
+Both implementations agree that **petal_width** is the dominant feature (~83%), followed by petal_length (~13%). The small differences come from the split criterion: gboost uses variance reduction while scikit-learn uses Friedman MSE.
+
 ### Impact of Newton-Raphson Leaf Optimization
 
 The Newton-Raphson optimization was the single largest accuracy improvement in gboost's development. The table below shows the before and after on the same Iris benchmark:
@@ -430,6 +459,11 @@ print("Train Accuracy: {:.2f}%".format(
     accuracy_score(y_train, model.predict(X_train)) * 100
 ))
 print("Test Log Loss: {:.4f}".format(log_loss(y_test, probs)))
+
+features = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+print("\n--- Feature Importance ---")
+for name, imp in zip(features, model.feature_importances_):
+    print("  {:<15s} {:.4f}".format(name, imp))
 ```
 
 ## Project Structure
@@ -468,7 +502,7 @@ Test coverage is approximately 97.9% across all modules.
 See [ROADMAP.md](ROADMAP.md) for the full development plan. In summary:
 
 - **Phase 1: Core Algorithm** — Complete. Full GBM with MSE/LogLoss, tree building, serialization, dataset utilities, and sklearn validation.
-- **Phase 2: Accuracy & Correctness** — Newton-Raphson leaf optimization (complete), feature importance, reproducible randomness, correctness test suite.
+- **Phase 2: Accuracy & Correctness** — Newton-Raphson leaf optimization (complete), feature importance (complete), reproducible randomness, correctness test suite.
 - **Phase 3: Usability** — Early stopping, column subsampling, multi-class classification, additional loss functions.
 - **Phase 4: Performance** — Histogram binning, parallel split finding, column-major data layout.
 - **Phase 5: Benchmarking** — Standard dataset benchmarks and comprehensive sklearn comparison.
