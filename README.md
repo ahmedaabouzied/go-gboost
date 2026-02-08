@@ -17,6 +17,7 @@ predictions := model.Predict(X)
 - [Examples](#examples)
 - [Comparison with scikit-learn](#comparison-with-scikit-learn)
 - [Project Structure](#project-structure)
+- [Roadmap](#roadmap)
 - [References](#references)
 
 ## Installation
@@ -462,6 +463,16 @@ go test -cover ./...   # With coverage report
 ```
 
 Test coverage is approximately 97.9% across all modules.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full development plan. In summary:
+
+- **Phase 1: Core Algorithm** — Complete. Full GBM with MSE/LogLoss, tree building, serialization, dataset utilities, and sklearn validation.
+- **Phase 2: Accuracy & Correctness** — Newton-Raphson leaf optimization, feature importance, reproducible randomness, correctness test suite.
+- **Phase 3: Usability** — Early stopping, column subsampling, multi-class classification, additional loss functions.
+- **Phase 4: Performance** — Histogram binning, parallel split finding, column-major data layout.
+- **Phase 5: Benchmarking** — Standard dataset benchmarks and comprehensive sklearn comparison.
 
 ## References
 
