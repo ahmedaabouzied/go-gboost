@@ -543,10 +543,11 @@ func TestCollectGainsLeafNode(t *testing.T) {
 }
 
 func TestCollectGainsSingleSplit(t *testing.T) {
-	// Internal node splitting on feature 1 with gain 0.75
+	// Internal node splitting on feature 1 with gain 0.75, 10 samples
 	node := &Node{
 		FeatureIndex: 1,
 		Gain:         0.75,
+		NSamples:     10,
 		Left:         &Node{FeatureIndex: -1, Value: 1.0},
 		Right:        &Node{FeatureIndex: -1, Value: 2.0},
 	}
@@ -556,8 +557,9 @@ func TestCollectGainsSingleSplit(t *testing.T) {
 	if gains[0] != 0 {
 		t.Errorf("gains[0] = %v, want 0", gains[0])
 	}
-	if gains[1] != 0.75 {
-		t.Errorf("gains[1] = %v, want 0.75", gains[1])
+	// 10 * 0.75 = 7.5
+	if gains[1] != 7.5 {
+		t.Errorf("gains[1] = %v, want 7.5", gains[1])
 	}
 	if gains[2] != 0 {
 		t.Errorf("gains[2] = %v, want 0", gains[2])
@@ -565,15 +567,17 @@ func TestCollectGainsSingleSplit(t *testing.T) {
 }
 
 func TestCollectGainsMultiLevel(t *testing.T) {
-	// Root splits on feature 0 (gain=1.0)
-	//   Left splits on feature 1 (gain=0.5)
+	// Root splits on feature 0 (gain=1.0, 20 samples)
+	//   Left splits on feature 1 (gain=0.5, 12 samples)
 	//   Right is leaf
 	node := &Node{
 		FeatureIndex: 0,
 		Gain:         1.0,
+		NSamples:     20,
 		Left: &Node{
 			FeatureIndex: 1,
 			Gain:         0.5,
+			NSamples:     12,
 			Left:         &Node{FeatureIndex: -1, Value: 1.0},
 			Right:        &Node{FeatureIndex: -1, Value: 2.0},
 		},
@@ -582,23 +586,27 @@ func TestCollectGainsMultiLevel(t *testing.T) {
 	gains := make([]float64, 2)
 	node.collectGains(gains)
 
-	if gains[0] != 1.0 {
-		t.Errorf("gains[0] = %v, want 1.0", gains[0])
+	// feature 0: 20 * 1.0 = 20.0
+	if gains[0] != 20.0 {
+		t.Errorf("gains[0] = %v, want 20.0", gains[0])
 	}
-	if gains[1] != 0.5 {
-		t.Errorf("gains[1] = %v, want 0.5", gains[1])
+	// feature 1: 12 * 0.5 = 6.0
+	if gains[1] != 6.0 {
+		t.Errorf("gains[1] = %v, want 6.0", gains[1])
 	}
 }
 
 func TestCollectGainsSameFeatureMultipleSplits(t *testing.T) {
-	// Feature 0 used at root (gain=1.0) and left child (gain=0.3)
-	// Gains should accumulate: feature 0 total = 1.3
+	// Feature 0 used at root (gain=1.0, 20 samples) and left child (gain=0.3, 12 samples)
+	// Feature 0 total = 20*1.0 + 12*0.3 = 23.6
 	node := &Node{
 		FeatureIndex: 0,
 		Gain:         1.0,
+		NSamples:     20,
 		Left: &Node{
 			FeatureIndex: 0,
 			Gain:         0.3,
+			NSamples:     12,
 			Left:         &Node{FeatureIndex: -1, Value: 1.0},
 			Right:        &Node{FeatureIndex: -1, Value: 2.0},
 		},
@@ -607,8 +615,8 @@ func TestCollectGainsSameFeatureMultipleSplits(t *testing.T) {
 	gains := make([]float64, 2)
 	node.collectGains(gains)
 
-	if math.Abs(gains[0]-1.3) > 1e-10 {
-		t.Errorf("gains[0] = %v, want 1.3", gains[0])
+	if math.Abs(gains[0]-23.6) > 1e-10 {
+		t.Errorf("gains[0] = %v, want 23.6", gains[0])
 	}
 	if gains[1] != 0 {
 		t.Errorf("gains[1] = %v, want 0", gains[1])
