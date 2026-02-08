@@ -8,6 +8,8 @@ type Node struct {
 	Left         *Node   // Pointer to the left child. Will be nil for leaf nodes.
 	Right        *Node   // Pointer to the right child. Will be nil for leaf nodes.
 	Value        float64 // The predicted value for a leaf node. The output basically for GBM.
+
+	Gain float64 // Recording how much gain the split at this node contributed, then we can get the important features.
 }
 
 type Split struct {
@@ -47,6 +49,7 @@ func buildTree(X [][]float64, y []float64, hessians []float64, indices []int, de
 	node := &Node{
 		FeatureIndex: split.FeatureIndex,
 		Threshold:    split.Threshold,
+		Gain:         split.Gain,
 	}
 	node.Left = buildTree(X, y, hessians, split.LeftIndices, depth+1, cfg)
 	node.Right = buildTree(X, y, hessians, split.RightIndices, depth+1, cfg)
