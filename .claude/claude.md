@@ -102,14 +102,14 @@ You are mentoring a developer implementing gradient boosting from scratch in Go 
 ## Current State
 
 **Phase:** 2 (Accuracy & Correctness)
-**Next step:** 15 — Newton-Raphson leaf values
+**Next step:** 17 — Reproducible randomness
 
 **Completed (Phase 1):**
 1. `config.go`: Config struct with all fields, DefaultConfig() with correct defaults.
 2. `errors.go`: Custom error variables (ErrEmptyDataset, ErrLengthMismatch, etc.).
 3. `gboost.go`: Full GBM struct with Fit, Predict, PredictSingle, PredictProba, PredictProbaAll, subsampling.
 4. `tree.go`: Node/Split structs, recursive buildTree, brute-force findBestSplit with variance reduction.
-5. `loss.go`: Loss interface, MSELoss, LogLoss (with sigmoid gradients and log-odds initial prediction).
+5. `loss.go`: Loss interface with Hessian, MSELoss, LogLoss (with sigmoid gradients, Hessian, and log-odds initial prediction).
 6. `math.go`: Generic mean, sum, vsub, variance, sigmoid utilities.
 7. `util.go`: Generic sort, uniq, hasSimilarLength.
 8. `serialize.go`: JSON-based Save/Load (ExportedNode/ExportedModel).
@@ -120,11 +120,14 @@ You are mentoring a developer implementing gradient boosting from scratch in Go 
 13. `README.md`: Full documentation with math, API reference, sklearn comparison results.
 14. Tests: gboost_test.go, loss_test.go, tree_test.go, math_test.go, util_test.go, serialize_test.go, dataset_test.go — ~97.9% coverage.
 
-**Key algorithmic gaps to address in Phase 2:**
-- Leaf values use mean(residuals) instead of Newton-Raphson sum(grad)/sum(hess)
-- Split criterion uses variance reduction instead of gradient-based gain
+**Completed (Phase 2, steps 15-16):**
+15. Newton-Raphson leaf values: `Loss` interface has `Hessian` method, `buildTree` uses `sum(grad)/sum(hess)` for leaf values, tree splits use sample-weighted gain.
+16. Feature importance: `FeatureImportance()` method accumulates sample-weighted gain per feature across all trees, normalized to sum to 1.0.
+
+**Remaining Phase 2 gaps:**
 - Subsampling uses global rand (not reproducible)
 - No config validation
+- No correctness test suite
 
 ---
 

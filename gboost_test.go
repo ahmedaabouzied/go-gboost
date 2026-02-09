@@ -501,6 +501,117 @@ func TestFeatureImportanceZeroEstimators(t *testing.T) {
 	}
 }
 
+func TestSameSeedSameModel(t *testing.T) {
+	X := [][]float64{
+		{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}, {4.0, 5.0},
+		{5.0, 6.0}, {6.0, 7.0}, {7.0, 8.0}, {8.0, 9.0},
+		{9.0, 10.0}, {10.0, 11.0},
+	}
+	y := []float64{3, 5, 7, 9, 11, 13, 15, 17, 19, 21}
+
+	cfg := Config{
+		Seed:           42,
+		NEstimators:    20,
+		LearningRate:   0.3,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 0.8,
+		Loss:           "mse",
+	}
+
+	gbm1 := New(cfg)
+	gbm1.Fit(X, y)
+	preds1 := gbm1.Predict(X)
+
+	gbm2 := New(cfg)
+	gbm2.Fit(X, y)
+	preds2 := gbm2.Predict(X)
+
+	for i := range preds1 {
+		if preds1[i] != preds2[i] {
+			t.Errorf("prediction[%d]: gbm1=%v, gbm2=%v — same seed should produce identical results", i, preds1[i], preds2[i])
+		}
+	}
+}
+
+func TestDifferentSeedDifferentModel(t *testing.T) {
+	X := [][]float64{
+		{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}, {4.0, 5.0},
+		{5.0, 6.0}, {6.0, 7.0}, {7.0, 8.0}, {8.0, 9.0},
+		{9.0, 10.0}, {10.0, 11.0},
+	}
+	y := []float64{3, 5, 7, 9, 11, 13, 15, 17, 19, 21}
+
+	cfg1 := Config{
+		Seed:           42,
+		NEstimators:    20,
+		LearningRate:   0.3,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 0.8,
+		Loss:           "mse",
+	}
+	cfg2 := cfg1
+	cfg2.Seed = 99
+
+	gbm1 := New(cfg1)
+	gbm1.Fit(X, y)
+	preds1 := gbm1.Predict(X)
+
+	gbm2 := New(cfg2)
+	gbm2.Fit(X, y)
+	preds2 := gbm2.Predict(X)
+
+	allSame := true
+	for i := range preds1 {
+		if preds1[i] != preds2[i] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		t.Error("different seeds produced identical predictions — randomness is not seed-dependent")
+	}
+}
+
+func TestRefitResetsSeed(t *testing.T) {
+	X := [][]float64{
+		{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}, {4.0, 5.0},
+		{5.0, 6.0}, {6.0, 7.0}, {7.0, 8.0}, {8.0, 9.0},
+		{9.0, 10.0}, {10.0, 11.0},
+	}
+	y := []float64{3, 5, 7, 9, 11, 13, 15, 17, 19, 21}
+
+	cfg := Config{
+		Seed:           42,
+		NEstimators:    20,
+		LearningRate:   0.3,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 0.8,
+		Loss:           "mse",
+	}
+
+	// Fit once
+	gbm := New(cfg)
+	gbm.Fit(X, y)
+
+	// Fit again on the same instance — RNG should reset
+	gbm.Fit(X, y)
+	predsRefit := gbm.Predict(X)
+
+	// Fresh instance with same config
+	fresh := New(cfg)
+	fresh.Fit(X, y)
+	predsFresh := fresh.Predict(X)
+
+	for i := range predsRefit {
+		if predsRefit[i] != predsFresh[i] {
+			t.Errorf("prediction[%d]: refit=%v, fresh=%v — re-fitting should reset RNG", i, predsRefit[i], predsFresh[i])
+		}
+	}
+}
+
 func TestFeatureImportanceClassification(t *testing.T) {
 	// Binary classification: class determined by x0 > 5
 	X := [][]float64{

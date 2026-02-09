@@ -1,6 +1,7 @@
 package gboost
 
 type Config struct {
+	Seed           int64   // Seed for randomizing to reproduce the same models from the same data.
 	NEstimators    int     // Number of trees
 	LearningRate   float64 // shrinkage factor
 	MaxDepth       int     // Maximum tree depth
@@ -11,6 +12,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
+		Seed:           0,
 		NEstimators:    100,
 		LearningRate:   0.1,
 		MaxDepth:       6,

@@ -4,6 +4,7 @@ import "math/rand"
 
 type GBM struct {
 	Config            Config
+	rnd               *rand.Rand // Used to produce the same model from the same dataset
 	isFitted          bool
 	trees             []*Node
 	initialPrediction float64 // The base score from the loss func
@@ -31,6 +32,10 @@ func (g *GBM) Fit(X [][]float64, y []float64) error {
 	case !hasSimilarLength(X):
 		return ErrFeatureCountMismatch
 	}
+
+	// Reset state for re-fitting
+	g.trees = nil
+	g.rnd = rand.New(rand.NewSource(g.Config.Seed))
 
 	// Set the number of features from the X set.
 	g.numFeatures = len(X[0])
@@ -122,7 +127,7 @@ func (g *GBM) sampleIndices(indices []int) []int {
 	sampleSize := int(float64(n) * sampleRatio)
 	shuffled := make([]int, n)
 	copy(shuffled, indices)
-	rand.Shuffle(n, func(i, j int) {
+	g.rnd.Shuffle(n, func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 	return shuffled[0:sampleSize]
