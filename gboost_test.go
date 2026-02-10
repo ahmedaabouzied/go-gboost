@@ -2,7 +2,10 @@ package gboost
 
 import (
 	"math"
+	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGBMFitPredict(t *testing.T) {
@@ -744,4 +747,58 @@ func TestFeatureImportanceClassification(t *testing.T) {
 	if imp[0] <= imp[1] {
 		t.Errorf("expected feature 0 (%.4f) > feature 1 (%.4f) for classification on x0", imp[0], imp[1])
 	}
+}
+
+func TestConvergence(t *testing.T) {
+	X, y := generateLinearData()
+	model := New(DefaultConfig())
+
+	err := model.Fit(X, y)
+	assert.Nil(t, err)
+
+	preds := make([]float64, len(X))
+	for i := range preds {
+		preds[i] = model.initialPrediction
+	}
+
+	lastMse := math.Inf(1)
+
+	for _, tree := range model.trees {
+		for j := range X {
+			preds[j] += model.Config.LearningRate * tree.predict(X[j])
+		}
+		mse := mse(preds, y)
+		assert.LessOrEqual(t, mse, lastMse)
+		lastMse = mse
+	}
+}
+
+func mse(x, y []float64) float64 {
+	mse := 0.0
+	for j := range y {
+		diff := x[j] - y[j]
+		mse += diff * diff
+	}
+	mse /= float64(len(y))
+	return mse
+}
+
+func generateLinearData() ([][]float64, []float64) {
+	X := make([][]float64, 50)
+	y := make([]float64, 50)
+
+	rnd := rand.New(rand.NewSource(0))
+
+	f := func(x1, x2 float64) float64 {
+		return 2*x1 + 3*x2
+	}
+
+	for i := range 50 {
+		x1 := rnd.Float64()
+		x2 := rnd.Float64()
+		y[i] = f(x1, x2)
+		X[i] = []float64{x1, x2}
+	}
+
+	return X, y
 }
