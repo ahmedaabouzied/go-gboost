@@ -804,6 +804,34 @@ func TestIdenticalTargets(t *testing.T) {
 	}
 }
 
+func TestIdenticalFeatures(t *testing.T) {
+	_, y := generateLinearData()
+	// Build an identical features data set
+	X := make([][]float64, len(y))
+	for i := range X {
+		X[i] = []float64{1.0, 2.0}
+	}
+
+	model := New(DefaultConfig())
+	assert.NoError(t, model.Fit(X, y))
+
+	X_test, _ := generateLinearData()
+	preds := model.Predict(X_test)
+	mean_y := mean(y)
+	for _, pred := range preds {
+		assert.Equal(t, mean_y, pred)
+	}
+}
+
+func TestDataWithSingleFeature(t *testing.T) {
+	X, y := generateLinearDataWithSingleFeature()
+
+	model := New(DefaultConfig())
+	assert.NoError(t, model.Fit(X, y))
+
+	assert.True(t, mse(model.Predict(X), y) < 1.0)
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
@@ -829,6 +857,26 @@ func generateLinearData() ([][]float64, []float64) {
 		x2 := rnd.Float64()
 		y[i] = f(x1, x2)
 		X[i] = []float64{x1, x2}
+	}
+
+	return X, y
+}
+
+func generateLinearDataWithSingleFeature() ([][]float64, []float64) {
+	X := make([][]float64, 50)
+	y := make([]float64, 50)
+
+	rnd := rand.New(rand.NewSource(0))
+
+	// One feature only
+	f := func(x1 float64) float64 {
+		return 2 * x1
+	}
+
+	for i := range 50 {
+		x1 := rnd.Float64()
+		y[i] = f(x1)
+		X[i] = []float64{x1}
 	}
 
 	return X, y
