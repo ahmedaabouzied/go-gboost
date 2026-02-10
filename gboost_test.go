@@ -773,6 +773,20 @@ func TestConvergence(t *testing.T) {
 	}
 }
 
+func TestOverfitting(t *testing.T) {
+	X, y := generateLinearData()
+
+	config := DefaultConfig()
+	config.MaxDepth = 10
+	config.NEstimators = 200
+
+	model := New(config)
+	assert.Nil(t, model.Fit(X, y))
+	preds := model.Predict(X)
+	assert.True(t, (mse(preds, y) < 1e-6))
+	// Model is over-fitted.
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
