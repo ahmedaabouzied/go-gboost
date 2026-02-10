@@ -101,33 +101,39 @@ You are mentoring a developer implementing gradient boosting from scratch in Go 
 
 ## Current State
 
-**Phase:** 2 (Accuracy & Correctness)
-**Next step:** 17 — Reproducible randomness
+**Phase:** 2 (Accuracy & Correctness) — nearly complete
+**Next step:** 19 (remaining tests) — extreme class imbalance, NEstimators=1/MaxDepth=1, numerical stability, sklearn parity
 
 **Completed (Phase 1):**
-1. `config.go`: Config struct with all fields, DefaultConfig() with correct defaults.
-2. `errors.go`: Custom error variables (ErrEmptyDataset, ErrLengthMismatch, etc.).
-3. `gboost.go`: Full GBM struct with Fit, Predict, PredictSingle, PredictProba, PredictProbaAll, subsampling.
+1. `config.go`: Config struct with all fields (including `Seed`), DefaultConfig() with correct defaults.
+2. `errors.go`: Custom error variables (ErrEmptyDataset, ErrLengthMismatch, ErrInvalidLearningRate, etc.).
+3. `gboost.go`: Full GBM struct with Fit, Predict, PredictSingle, PredictProba, PredictProbaAll, subsampling via local `*rand.Rand`.
 4. `tree.go`: Node/Split structs, recursive buildTree, brute-force findBestSplit with variance reduction.
 5. `loss.go`: Loss interface with Hessian, MSELoss, LogLoss (with sigmoid gradients, Hessian, and log-odds initial prediction).
 6. `math.go`: Generic mean, sum, vsub, variance, sigmoid utilities.
 7. `util.go`: Generic sort, uniq, hasSimilarLength.
 8. `serialize.go`: JSON-based Save/Load (ExportedNode/ExportedModel).
-9. `dataset.go`: LoadCSV with two-pass column type inference, whitespace trimming, label encoding. TrainTestSplit with validation. Dataset.Split convenience method.
+9. `dataset.go`: LoadCSV with two-pass column type inference, whitespace trimming, label encoding. TrainTestSplit with validation (local `*rand.Rand`). Dataset.Split convenience method.
 10. `cmd/demo/main.go`: Working regression demo with synthetic data.
 11. `cmd/iris/main.go`: Binary classification benchmark vs scikit-learn (90% accuracy, matches sklearn predictions).
 12. `data/iris_binary.csv`: Iris dataset filtered to versicolor vs virginica.
 13. `README.md`: Full documentation with math, API reference, sklearn comparison results.
 14. Tests: gboost_test.go, loss_test.go, tree_test.go, math_test.go, util_test.go, serialize_test.go, dataset_test.go — ~97.9% coverage.
 
-**Completed (Phase 2, steps 15-16):**
+**Completed (Phase 2, steps 15-19 partial):**
 15. Newton-Raphson leaf values: `Loss` interface has `Hessian` method, `buildTree` uses `sum(grad)/sum(hess)` for leaf values, tree splits use sample-weighted gain.
 16. Feature importance: `FeatureImportance()` method accumulates sample-weighted gain per feature across all trees, normalized to sum to 1.0.
-
-**Remaining Phase 2 gaps:**
-- Subsampling uses global rand (not reproducible)
-- No config validation
-- No correctness test suite
+17. Reproducible randomness: `Config.Seed` field, `g.rnd` is a local `*rand.Rand` seeded in `Fit()`, `TrainTestSplit` also uses local RNG. Tests: TestSameSeedSameModel, TestDifferentSeedDifferentModel, TestRefitResetsSeed.
+18. Config validation: `Config.validate()` checks all fields (NEstimators, LearningRate, MaxDepth, MinSamplesLeaf, SubsampleRatio, Loss). Called at start of `Fit()`. 13 test cases covering all error paths.
+19. Correctness test suite (partial):
+    - ✅ Convergence: TestConvergence (MSE decreases monotonically)
+    - ✅ Overfitting: TestOverfitting (near-zero training MSE)
+    - ✅ Determinism: TestSameSeedSameModel, TestDifferentSeedDifferentModel
+    - ✅ Edge cases: TestIdenticalTargets, TestIdenticalFeatures, TestDataWithSingleFeature, TestDataWithSingleSample
+    - ❌ Extreme class imbalance
+    - ❌ NEstimators=1, MaxDepth=1
+    - ❌ Numerical stability (large/small targets, sigmoid saturation)
+    - ❌ Sklearn parity
 
 ---
 

@@ -842,6 +842,40 @@ func TestDataWithSingleSample(t *testing.T) {
 	assert.True(t, mse(model.Predict(X), y) < 1.0)
 }
 
+func TestExtremeClassImbalance(t *testing.T) {
+	X, y := generateImbalancedData()
+
+	config := DefaultConfig()
+	config.Loss = "logloss"
+
+	model := New(config)
+	assert.NoError(t, model.Fit(X, y))
+
+	pred := model.PredictProbaAll(X)
+	classifications := make([]int, len(pred))
+	for i := range classifications {
+		if pred[i] > 0.5 {
+			classifications[i] = 1
+		}
+	}
+
+	// Count true positives
+	truePositives := 0
+	trueNegatives := 0
+	for i := range classifications {
+		if classifications[i] == 1 && y[i] == 1 {
+			truePositives += 1
+			continue
+		}
+		if classifications[i] == 0 && y[i] == 0 {
+			trueNegatives += 1
+		}
+	}
+
+	assert.True(t, truePositives > 0)
+	assert.True(t, trueNegatives > 1)
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
@@ -869,6 +903,28 @@ func generateLinearData() ([][]float64, []float64) {
 		X[i] = []float64{x1, x2}
 	}
 
+	return X, y
+}
+
+func generateImbalancedData() ([][]float64, []float64) {
+	X := make([][]float64, 200)
+	y := make([]float64, 200)
+
+	rnd := rand.New(rand.NewSource(0))
+
+	f := func(x1 float64) float64 {
+		if x1 > 8.0 {
+			return 1.0
+		}
+		return 0.0
+	}
+
+	for i := range 200 {
+		x1 := rnd.Float64() * 10
+		x2 := rnd.Float64() * 10
+		X[i] = []float64{x1, x2}
+		y[i] = f(x1)
+	}
 	return X, y
 }
 
