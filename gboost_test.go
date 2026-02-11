@@ -938,6 +938,39 @@ func TestRegressionWithVerySmallTargets(t *testing.T) {
 
 }
 
+func TestClassificationWithSigmoidSaturation(t *testing.T) {
+	X := make([][]float64, 100)
+	y := make([]float64, 100)
+
+	// Build the data with very distinct and far away clusters
+	for i := range len(X) {
+		if i < 50 {
+			X[i] = []float64{1.0, 1.1}
+			y[i] = 0.0
+		} else {
+			X[i] = []float64{100.0, 101.0}
+			y[i] = 1
+		}
+	}
+
+	// Extreme config with so many trees and very large tree depth
+	config := DefaultConfig()
+	config.Loss = "logloss"
+	config.NEstimators = 100
+	config.MaxDepth = 50
+
+	model := New(config)
+	assert.NoError(t, model.Fit(X, y))
+
+	predictions := model.PredictProbaAll(X)
+	for _, prediction := range predictions {
+		assert.False(t, math.IsInf(prediction, 1))
+		assert.False(t, math.IsNaN(prediction))
+		assert.Greater(t, prediction, 0.0)
+		assert.Less(t, prediction, 1.0)
+	}
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
