@@ -876,6 +876,39 @@ func TestExtremeClassImbalance(t *testing.T) {
 	assert.True(t, trueNegatives > 1)
 }
 
+func TestMinimalRegressionModel(t *testing.T) {
+	X, y := generateLinearData()
+
+	config := DefaultConfig()
+	config.NEstimators = 1
+	config.MaxDepth = 1
+	model := New(config)
+
+	assert.NoError(t, model.Fit(X, y))
+	meanOnlyMse := variance(y)
+	modelMse := mse(model.Predict(X), y)
+
+	assert.Greater(t, meanOnlyMse, modelMse)
+}
+
+func TestMinimalClassificationModel(t *testing.T) {
+	X, y := generateClassificationData()
+
+	config := DefaultConfig()
+	config.NEstimators = 1
+	config.MaxDepth = 1
+	config.Loss = "logloss"
+
+	model := New(config)
+	assert.NoError(t, model.Fit(X, y))
+
+	probabilities := model.PredictProbaAll(X)
+	for i := range probabilities {
+		assert.Less(t, probabilities[i], 1.0)
+		assert.Greater(t, probabilities[i], 0.0)
+	}
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
@@ -914,6 +947,28 @@ func generateImbalancedData() ([][]float64, []float64) {
 
 	f := func(x1 float64) float64 {
 		if x1 > 8.0 {
+			return 1.0
+		}
+		return 0.0
+	}
+
+	for i := range 200 {
+		x1 := rnd.Float64() * 10
+		x2 := rnd.Float64() * 10
+		X[i] = []float64{x1, x2}
+		y[i] = f(x1)
+	}
+	return X, y
+}
+
+func generateClassificationData() ([][]float64, []float64) {
+	X := make([][]float64, 200)
+	y := make([]float64, 200)
+
+	rnd := rand.New(rand.NewSource(0))
+
+	f := func(x1 float64) float64 {
+		if x1 > 5.0 {
 			return 1.0
 		}
 		return 0.0
