@@ -750,7 +750,7 @@ func TestFeatureImportanceClassification(t *testing.T) {
 }
 
 func TestConvergence(t *testing.T) {
-	X, y := generateLinearData()
+	X, y := generateDataWithFunc(linearFunc)
 	model := New(DefaultConfig())
 
 	err := model.Fit(X, y)
@@ -774,7 +774,7 @@ func TestConvergence(t *testing.T) {
 }
 
 func TestOverfitting(t *testing.T) {
-	X, y := generateLinearData()
+	X, y := generateDataWithFunc(linearFunc)
 
 	config := DefaultConfig()
 	config.MaxDepth = 10
@@ -788,8 +788,8 @@ func TestOverfitting(t *testing.T) {
 }
 
 func TestIdenticalTargets(t *testing.T) {
-	X, _ := generateLinearData()
-	y := make([]float64, len(X))
+	X, y := generateDataWithFunc(linearFunc)
+	y = make([]float64, len(X))
 	for i := range y {
 		y[i] = 5.0
 	}
@@ -797,7 +797,7 @@ func TestIdenticalTargets(t *testing.T) {
 	model := New(DefaultConfig())
 	assert.NoError(t, model.Fit(X, y))
 
-	X_test, _ := generateLinearData()
+	X_test, y := generateDataWithFunc(linearFunc)
 	preds := model.Predict(X_test)
 	for _, pred := range preds {
 		assert.Equal(t, 5.0, pred)
@@ -805,7 +805,7 @@ func TestIdenticalTargets(t *testing.T) {
 }
 
 func TestIdenticalFeatures(t *testing.T) {
-	_, y := generateLinearData()
+	_, y := generateDataWithFunc(linearFunc)
 	// Build an identical features data set
 	X := make([][]float64, len(y))
 	for i := range X {
@@ -815,7 +815,7 @@ func TestIdenticalFeatures(t *testing.T) {
 	model := New(DefaultConfig())
 	assert.NoError(t, model.Fit(X, y))
 
-	X_test, _ := generateLinearData()
+	X_test, _ := generateDataWithFunc(linearFunc)
 	preds := model.Predict(X_test)
 	mean_y := mean(y)
 	for _, pred := range preds {
@@ -843,7 +843,7 @@ func TestDataWithSingleSample(t *testing.T) {
 }
 
 func TestExtremeClassImbalance(t *testing.T) {
-	X, y := generateImbalancedData()
+	X, y := generateBinaryData(8.0)
 
 	config := DefaultConfig()
 	config.Loss = "logloss"
@@ -877,7 +877,7 @@ func TestExtremeClassImbalance(t *testing.T) {
 }
 
 func TestMinimalRegressionModel(t *testing.T) {
-	X, y := generateLinearData()
+	X, y := generateDataWithFunc(linearFunc)
 
 	config := DefaultConfig()
 	config.NEstimators = 1
@@ -892,7 +892,7 @@ func TestMinimalRegressionModel(t *testing.T) {
 }
 
 func TestMinimalClassificationModel(t *testing.T) {
-	X, y := generateClassificationData()
+	X, y := generateBinaryData(5.0)
 
 	config := DefaultConfig()
 	config.NEstimators = 1
@@ -909,6 +909,35 @@ func TestMinimalClassificationModel(t *testing.T) {
 	}
 }
 
+func TestRegressionWithVeryLargeTargets(t *testing.T) {
+	X, y := generateDataWithFunc(func(x1, x2 float64) float64 {
+		return 1e8 * (x1*2 + x2*3)
+	})
+
+	model := New(DefaultConfig())
+	assert.NoError(t, model.Fit(X, y))
+
+	meanOnlyMse := variance(y)
+	modelMse := mse(model.Predict(X), y)
+
+	assert.Greater(t, meanOnlyMse, modelMse)
+}
+
+func TestRegressionWithVerySmallTargets(t *testing.T) {
+	X, y := generateDataWithFunc(func(x1, x2 float64) float64 {
+		return 1e-8 * (x1*2 + x2*3)
+	})
+
+	model := New(DefaultConfig())
+	assert.NoError(t, model.Fit(X, y))
+
+	meanOnlyMse := variance(y)
+	modelMse := mse(model.Predict(X), y)
+
+	assert.Greater(t, meanOnlyMse, modelMse)
+
+}
+
 func mse(x, y []float64) float64 {
 	mse := 0.0
 	for j := range y {
@@ -919,15 +948,15 @@ func mse(x, y []float64) float64 {
 	return mse
 }
 
-func generateLinearData() ([][]float64, []float64) {
+var linearFunc = func(x1, x2 float64) float64 {
+	return 2*x1 + 3*x2
+}
+
+func generateDataWithFunc(f func(x1, x2 float64) float64) ([][]float64, []float64) {
 	X := make([][]float64, 50)
 	y := make([]float64, 50)
 
 	rnd := rand.New(rand.NewSource(0))
-
-	f := func(x1, x2 float64) float64 {
-		return 2*x1 + 3*x2
-	}
 
 	for i := range 50 {
 		x1 := rnd.Float64()
@@ -939,36 +968,14 @@ func generateLinearData() ([][]float64, []float64) {
 	return X, y
 }
 
-func generateImbalancedData() ([][]float64, []float64) {
+func generateBinaryData(threshold float64) ([][]float64, []float64) {
 	X := make([][]float64, 200)
 	y := make([]float64, 200)
 
 	rnd := rand.New(rand.NewSource(0))
 
 	f := func(x1 float64) float64 {
-		if x1 > 8.0 {
-			return 1.0
-		}
-		return 0.0
-	}
-
-	for i := range 200 {
-		x1 := rnd.Float64() * 10
-		x2 := rnd.Float64() * 10
-		X[i] = []float64{x1, x2}
-		y[i] = f(x1)
-	}
-	return X, y
-}
-
-func generateClassificationData() ([][]float64, []float64) {
-	X := make([][]float64, 200)
-	y := make([]float64, 200)
-
-	rnd := rand.New(rand.NewSource(0))
-
-	f := func(x1 float64) float64 {
-		if x1 > 5.0 {
+		if x1 > threshold {
 			return 1.0
 		}
 		return 0.0
