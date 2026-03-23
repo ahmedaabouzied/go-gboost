@@ -24,6 +24,15 @@ jobs:
           name: coverage
           path: coverage.out
 
+  goprove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ahmedaabouzied/goprove-action@v1
+        with:
+          path: ./...
+          fail-on-warnings: false
+
   badge:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
