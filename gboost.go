@@ -146,6 +146,60 @@ func (g *GBM) FeatureImportance() []float64 {
 	return g.featureImportance
 }
 
+func (g *GBM) ShapValues(X [][]float64) ([][]float64, error) {
+	result := make([][]float64, len(X))
+
+	for i, x := range X {
+		contrib, err := g.ShapValuesSingle(x)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = contrib
+	}
+
+	return result, nil
+}
+
+func (g *GBM) BaseValue() float64 {
+	if !g.isFitted {
+		return 0
+	}
+
+	v := g.initialPrediction
+	for _, tree := range g.trees {
+		v += g.Config.LearningRate * tree.expectedValue()
+	}
+
+	return v
+}
+
+func (g *GBM) ShapValuesSingle(x []float64) ([]float64, error) {
+	if !g.isFitted {
+		return nil, ErrModelNotFitted
+	}
+
+	if len(x) != g.numFeatures {
+		return nil, ErrFeatureCountMismatch
+	}
+
+	phi := make([]float64, g.numFeatures)
+	phiTmp := make([]float64, g.numFeatures)
+
+	for _, tree := range g.trees {
+		for i := range phiTmp {
+			phiTmp[i] = 0
+		}
+
+		treeShap(tree, x, phiTmp, newPath(g.Config.MaxDepth))
+
+		for i := range phi {
+			phi[i] += g.Config.LearningRate * phiTmp[i]
+		}
+	}
+
+	return phi, nil
+}
+
 func (g *GBM) sampleIndices(indices []int) []int {
 	sampleRatio := g.Config.SubsampleRatio
 

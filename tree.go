@@ -134,6 +134,18 @@ func (n *Node) collectGains(index []float64) {
 	n.Right.collectGains(index)
 }
 
+func (n *Node) expectedValue() float64 {
+	if n.Left == nil && n.Right == nil {
+		// Leaf node
+		return n.Value
+	}
+
+	rL := float64(n.Left.NSamples) / float64(n.NSamples)
+	rR := float64(n.Right.NSamples) / float64(n.NSamples)
+
+	return rL*n.Left.expectedValue() + rR*n.Right.expectedValue()
+}
+
 func extractRows[T any](y []T, indices []int) []T {
 	res := make([]T, len(indices))
 	for j, i := range indices {
