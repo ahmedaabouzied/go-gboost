@@ -1,6 +1,9 @@
 package gboost
 
-import "math/rand"
+import (
+	"math"
+	"math/rand"
+)
 
 // GBM is a gradient boosting machine model. Create one with [New], train it
 // with [GBM.Fit], and make predictions with [GBM.Predict] or [GBM.PredictProba].
@@ -198,6 +201,33 @@ func (g *GBM) ShapValuesSingle(x []float64) ([]float64, error) {
 	}
 
 	return phi, nil
+}
+
+func (g *GBM) ShapImportance(X [][]float64) ([]float64, error) {
+	if !g.isFitted {
+		return nil, ErrModelNotFitted
+	}
+
+	if len(X) == 0 {
+		return nil, ErrEmptyDataset
+	}
+
+	shap, err := g.ShapValues(X)
+	if err != nil {
+		return nil, err
+	}
+
+	importance := make([]float64, g.numFeatures)
+	for _, row := range shap {
+		for j := range g.numFeatures {
+			importance[j] += math.Abs(row[j])
+		}
+	}
+
+	for j := range g.numFeatures {
+		importance[j] /= float64(len(X))
+	}
+	return importance, nil
 }
 
 func (g *GBM) sampleIndices(indices []int) []int {
