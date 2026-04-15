@@ -26,6 +26,7 @@ func buildLeafNode(y, hessians []float64) *Node {
 		FeatureIndex: -1, // Not relevant in this case
 		Threshold:    0,  // Not relevant in this case
 		Value:        sum(y) / sum(hessians),
+		NSamples:     len(y),
 	}
 }
 

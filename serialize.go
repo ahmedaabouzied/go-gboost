@@ -13,6 +13,7 @@ type ExportedNode struct {
 	IsLeaf       bool          `json:"is_leaf"`
 	Left         *ExportedNode `json:"left,omitempty"`
 	Right        *ExportedNode `json:"right,omitempty"`
+	NSamples     int           `json:"n_samples"`
 }
 
 // ExportedModel is the JSON-serializable representation of a GBM model
@@ -37,6 +38,7 @@ func (n *Node) toExported() *ExportedNode {
 		IsLeaf:       isLeaf,
 		Left:         n.Left.toExported(),
 		Right:        n.Right.toExported(),
+		NSamples:     n.NSamples,
 	}
 }
 
@@ -52,6 +54,7 @@ func nodeFromExported(e *ExportedNode) *Node {
 		Value:        e.Value,
 		Left:         nodeFromExported(e.Left),
 		Right:        nodeFromExported(e.Right),
+		NSamples:     e.NSamples,
 	}
 }
 

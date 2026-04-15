@@ -622,3 +622,60 @@ func TestCollectGainsSameFeatureMultipleSplits(t *testing.T) {
 		t.Errorf("gains[1] = %v, want 0", gains[1])
 	}
 }
+
+// TestNSamplesInvariant checks that every internal node satisfies
+// NSamples == Left.NSamples + Right.NSamples, and every leaf has
+// NSamples > 0. TreeSHAP relies on this invariant for correct weighting.
+func TestNSamplesInvariant(t *testing.T) {
+	X := [][]float64{
+		{1.0, 10.0},
+		{2.0, 20.0},
+		{3.0, 30.0},
+		{4.0, 40.0},
+		{5.0, 50.0},
+		{6.0, 60.0},
+		{7.0, 70.0},
+		{8.0, 80.0},
+	}
+	y := []float64{1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0}
+	hessians := make([]float64, len(y))
+	for i := range hessians {
+		hessians[i] = 1.0
+	}
+	indices := []int{0, 1, 2, 3, 4, 5, 6, 7}
+	cfg := Config{
+		MaxDepth:       4,
+		MinSamplesLeaf: 1,
+	}
+
+	tree := buildTree(X, y, hessians, indices, 0, cfg)
+
+	var check func(n *Node, path string)
+	check = func(n *Node, path string) {
+		if n == nil {
+			t.Fatalf("nil node at %s", path)
+		}
+		if n.Left == nil && n.Right == nil {
+			if n.NSamples <= 0 {
+				t.Errorf("leaf at %s has NSamples=%d, want > 0", path, n.NSamples)
+			}
+			return
+		}
+		if n.Left == nil || n.Right == nil {
+			t.Fatalf("internal node at %s has only one child", path)
+		}
+		if got, want := n.NSamples, n.Left.NSamples+n.Right.NSamples; got != want {
+			t.Errorf("internal node at %s: NSamples=%d, want Left+Right=%d",
+				path, got, want)
+		}
+		check(n.Left, path+"L")
+		check(n.Right, path+"R")
+	}
+
+	check(tree, "root")
+
+	// Root must cover all training samples.
+	if tree.NSamples != len(indices) {
+		t.Errorf("root NSamples=%d, want %d", tree.NSamples, len(indices))
+	}
+}
