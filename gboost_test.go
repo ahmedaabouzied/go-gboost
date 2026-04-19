@@ -1,6 +1,7 @@
 package gboost
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 	"testing"
@@ -979,6 +980,141 @@ func mse(x, y []float64) float64 {
 	}
 	mse /= float64(len(y))
 	return mse
+}
+
+func TestOnRoundEndNilIsNoop(t *testing.T) {
+	X := [][]float64{{1.0}, {2.0}, {3.0}, {4.0}, {5.0}}
+	y := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	cfg := Config{
+		NEstimators:    5,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "mse",
+		OnRoundEnd:     nil,
+	}
+
+	gbm := New(cfg)
+	if err := gbm.Fit(X, y); err != nil {
+		t.Fatalf("Fit with nil OnRoundEnd failed: %v", err)
+	}
+	if len(gbm.trees) != cfg.NEstimators {
+		t.Errorf("expected %d trees, got %d", cfg.NEstimators, len(gbm.trees))
+	}
+}
+
+func TestOnRoundEndFiresEachRound(t *testing.T) {
+	X := [][]float64{{1.0}, {2.0}, {3.0}, {4.0}, {5.0}}
+	y := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	const n = 10
+	var calls []int
+
+	cfg := Config{
+		NEstimators:    n,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "mse",
+		OnRoundEnd: func(round, total int) error {
+			if total != n {
+				t.Errorf("round %d: total=%d, want %d", round, total, n)
+			}
+			calls = append(calls, round)
+			return nil
+		},
+	}
+
+	gbm := New(cfg)
+	if err := gbm.Fit(X, y); err != nil {
+		t.Fatalf("Fit failed: %v", err)
+	}
+
+	if len(calls) != n {
+		t.Fatalf("callback fired %d times, want %d", len(calls), n)
+	}
+	for i, round := range calls {
+		if round != i+1 {
+			t.Errorf("calls[%d]=%d, want %d (1-based, monotonic)", i, round, i+1)
+		}
+	}
+}
+
+func TestOnRoundEndErrorAbortsTraining(t *testing.T) {
+	X := [][]float64{{1.0}, {2.0}, {3.0}, {4.0}, {5.0}}
+	y := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	stopErr := errors.New("stop")
+	const abortAt = 3
+
+	cfg := Config{
+		NEstimators:    10,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "mse",
+		OnRoundEnd: func(round, total int) error {
+			if round == abortAt {
+				return stopErr
+			}
+			return nil
+		},
+	}
+
+	gbm := New(cfg)
+	err := gbm.Fit(X, y)
+	if !errors.Is(err, stopErr) {
+		t.Fatalf("Fit returned %v, want %v", err, stopErr)
+	}
+	if len(gbm.trees) != abortAt {
+		t.Errorf("after abort on round %d: len(trees)=%d, want %d", abortAt, len(gbm.trees), abortAt)
+	}
+	if gbm.isFitted {
+		t.Error("expected isFitted=false after aborted Fit")
+	}
+}
+
+func TestOnRoundEndRefitFiresFreshCounts(t *testing.T) {
+	X := [][]float64{{1.0}, {2.0}, {3.0}, {4.0}, {5.0}}
+	y := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	const n = 4
+	var allCalls []int
+
+	cfg := Config{
+		NEstimators:    n,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "mse",
+		OnRoundEnd: func(round, total int) error {
+			allCalls = append(allCalls, round)
+			return nil
+		},
+	}
+
+	gbm := New(cfg)
+	if err := gbm.Fit(X, y); err != nil {
+		t.Fatalf("first Fit failed: %v", err)
+	}
+	if err := gbm.Fit(X, y); err != nil {
+		t.Fatalf("second Fit failed: %v", err)
+	}
+
+	want := []int{1, 2, 3, 4, 1, 2, 3, 4}
+	if len(allCalls) != len(want) {
+		t.Fatalf("got %d calls, want %d", len(allCalls), len(want))
+	}
+	for i, got := range allCalls {
+		if got != want[i] {
+			t.Errorf("call[%d]=%d, want %d", i, got, want[i])
+		}
+	}
 }
 
 var linearFunc = func(x1, x2 float64) float64 {

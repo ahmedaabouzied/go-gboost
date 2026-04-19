@@ -80,7 +80,7 @@ func (g *GBM) Fit(X [][]float64, y []float64) error {
 	}
 
 	// Training ...
-	for range g.Config.NEstimators {
+	for i := range g.Config.NEstimators {
 		trainIndices := allIndices
 		if g.Config.SubsampleRatio > 0 && g.Config.SubsampleRatio < 1.0 {
 			trainIndices = g.sampleIndices(allIndices)
@@ -93,6 +93,10 @@ func (g *GBM) Fit(X [][]float64, y []float64) error {
 		}
 
 		g.trees = append(g.trees, tree)
+
+		if err := g.fireRoundEndCallback(i + 1); err != nil {
+			return err
+		}
 	}
 	// Calculate the featureImportance
 	g.calculateFeatureImportance()
@@ -308,6 +312,13 @@ func (g *GBM) calculateFeatureImportance() {
 		}
 	}
 	g.featureImportance = res
+}
+
+func (g *GBM) fireRoundEndCallback(round int) error {
+	if g.Config.OnRoundEnd == nil {
+		return nil
+	}
+	return g.Config.OnRoundEnd(round, g.Config.NEstimators)
 }
 
 func createLossFunction(cfg Config) Loss {

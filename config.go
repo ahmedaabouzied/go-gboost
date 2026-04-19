@@ -29,6 +29,11 @@ type Config struct {
 
 	// Loss is the loss function name: "mse" for regression or "logloss" for binary classification.
 	Loss string
+
+	// OnRoundEnd is a callback to report how much progress we
+	// have made during training. It can be used by the library
+	// callers to track and report training progress.
+	OnRoundEnd func(round, total int) error `json:"-"`
 }
 
 func (c Config) validate() error {
