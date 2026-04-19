@@ -21,6 +21,8 @@ type ExportedModel struct {
 	Config            Config          `json:"config"`
 	InitialPrediction float64         `json:"initial_prediction"`
 	Trees             []*ExportedNode `json:"trees"`
+	NumFeatures       int             `json:"num_features"`
+	FeatureImportance []float64       `json:"feature_importance"`
 }
 
 // toExported converts an internal Node to an ExportedNode
@@ -69,6 +71,8 @@ func (g *GBM) toExported() *ExportedModel {
 		Config:            g.Config,
 		InitialPrediction: g.initialPrediction,
 		Trees:             trees,
+		NumFeatures:       g.numFeatures,
+		FeatureImportance: g.featureImportance,
 	}
 }
 
@@ -83,8 +87,10 @@ func fromExported(e *ExportedModel) *GBM {
 		Config:            e.Config,
 		initialPrediction: e.InitialPrediction,
 		trees:             trees,
-		isFitted:          true,
+		featureImportance: e.FeatureImportance,
+		numFeatures:       e.NumFeatures,
 		loss:              createLossFunction(e.Config),
+		isFitted:          true,
 	}
 }
 

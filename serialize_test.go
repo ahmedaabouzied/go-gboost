@@ -214,11 +214,253 @@ func TestJSONFormat(t *testing.T) {
 		`"feature_index"`,
 		`"threshold"`,
 		`"value"`,
+		`"num_features"`,
+		`"feature_importance"`,
 	}
 
 	for _, field := range expectedFields {
 		if !contains(content, field) {
 			t.Errorf("JSON missing field: %s", field)
+		}
+	}
+}
+
+// fitRoundTripRegressor trains a small 4-feature regression model and
+// round-trips it through Save/Load. Used by the tests that assert fields
+// beyond config/trees survive serialization.
+func fitRoundTripRegressor(t *testing.T) (original, loaded *GBM, X [][]float64) {
+	t.Helper()
+
+	X = [][]float64{
+		{1.0, 2.0, 0.5, 10.0},
+		{2.0, 1.0, 1.5, 9.0},
+		{3.0, 3.0, 2.5, 8.0},
+		{4.0, 2.0, 3.5, 7.0},
+		{5.0, 1.0, 4.5, 6.0},
+		{6.0, 3.0, 5.5, 5.0},
+		{7.0, 2.0, 6.5, 4.0},
+		{8.0, 1.0, 7.5, 3.0},
+	}
+	y := []float64{3, 5, 9, 12, 14, 18, 21, 24}
+
+	cfg := Config{
+		NEstimators:    20,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "mse",
+		Seed:           42,
+	}
+
+	original = New(cfg)
+	if err := original.Fit(X, y); err != nil {
+		t.Fatalf("Fit failed: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "model.json")
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	var err error
+	loaded, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	return original, loaded, X
+}
+
+func TestSaveLoadPreservesNumFeatures(t *testing.T) {
+	_, loaded, X := fitRoundTripRegressor(t)
+
+	want := len(X[0])
+	if loaded.numFeatures != want {
+		t.Errorf("numFeatures: got %d, want %d", loaded.numFeatures, want)
+	}
+}
+
+func TestSaveLoadPreservesFeatureImportance(t *testing.T) {
+	original, loaded, _ := fitRoundTripRegressor(t)
+
+	orig := original.FeatureImportance()
+	got := loaded.FeatureImportance()
+
+	if len(got) != len(orig) {
+		t.Fatalf("length: got %d, want %d", len(got), len(orig))
+	}
+
+	for i := range orig {
+		if math.Abs(orig[i]-got[i]) > 1e-10 {
+			t.Errorf("importance[%d]: original=%v, loaded=%v", i, orig[i], got[i])
+		}
+	}
+}
+
+func TestSaveLoadPreservesShapValues(t *testing.T) {
+	original, loaded, X := fitRoundTripRegressor(t)
+
+	orig, err := original.ShapValues(X)
+	if err != nil {
+		t.Fatalf("original ShapValues: %v", err)
+	}
+
+	got, err := loaded.ShapValues(X)
+	if err != nil {
+		t.Fatalf("loaded ShapValues: %v", err)
+	}
+
+	if len(got) != len(orig) {
+		t.Fatalf("rows: got %d, want %d", len(got), len(orig))
+	}
+
+	for i := range orig {
+		if len(got[i]) != len(orig[i]) {
+			t.Fatalf("row %d length: got %d, want %d", i, len(got[i]), len(orig[i]))
+		}
+		for j := range orig[i] {
+			if math.Abs(orig[i][j]-got[i][j]) > 1e-10 {
+				t.Errorf("shap[%d][%d]: original=%v, loaded=%v", i, j, orig[i][j], got[i][j])
+			}
+		}
+	}
+}
+
+func TestSaveLoadPreservesShapImportance(t *testing.T) {
+	original, loaded, X := fitRoundTripRegressor(t)
+
+	orig, err := original.ShapImportance(X)
+	if err != nil {
+		t.Fatalf("original ShapImportance: %v", err)
+	}
+
+	got, err := loaded.ShapImportance(X)
+	if err != nil {
+		t.Fatalf("loaded ShapImportance: %v", err)
+	}
+
+	if len(got) != len(orig) {
+		t.Fatalf("length: got %d, want %d", len(got), len(orig))
+	}
+
+	for i := range orig {
+		if math.Abs(orig[i]-got[i]) > 1e-10 {
+			t.Errorf("importance[%d]: original=%v, loaded=%v", i, orig[i], got[i])
+		}
+	}
+}
+
+// TestSaveLoadPreservesBaseValue guards the SHAP additivity contract on a
+// loaded model: sum(phi) + BaseValue == PredictSingle.
+func TestSaveLoadPreservesBaseValue(t *testing.T) {
+	original, loaded, X := fitRoundTripRegressor(t)
+
+	if math.Abs(original.BaseValue()-loaded.BaseValue()) > 1e-10 {
+		t.Errorf("BaseValue: original=%v, loaded=%v",
+			original.BaseValue(), loaded.BaseValue())
+	}
+
+	phi, err := loaded.ShapValuesSingle(X[0])
+	if err != nil {
+		t.Fatalf("ShapValuesSingle: %v", err)
+	}
+	sum := loaded.BaseValue()
+	for _, v := range phi {
+		sum += v
+	}
+	pred := loaded.PredictSingle(X[0])
+	if math.Abs(sum-pred) > 1e-10 {
+		t.Errorf("additivity broken on loaded model: sum(phi)+base=%v, PredictSingle=%v",
+			sum, pred)
+	}
+}
+
+// TestSaveLoadShapRejectsWrongFeatureCount catches regressions where
+// numFeatures is silently lost (zeroed) on Load — a zero value would accept
+// empty inputs and reject everything else with ErrFeatureCountMismatch,
+// which is the exact bug this field was added to prevent.
+func TestSaveLoadShapRejectsWrongFeatureCount(t *testing.T) {
+	_, loaded, X := fitRoundTripRegressor(t)
+
+	// Correct width must succeed.
+	if _, err := loaded.ShapValuesSingle(X[0]); err != nil {
+		t.Errorf("ShapValuesSingle with correct width: got err=%v, want nil", err)
+	}
+
+	// Wrong width must fail with ErrFeatureCountMismatch.
+	tooShort := X[0][:len(X[0])-1]
+	if _, err := loaded.ShapValuesSingle(tooShort); err != ErrFeatureCountMismatch {
+		t.Errorf("ShapValuesSingle with short input: got err=%v, want ErrFeatureCountMismatch", err)
+	}
+
+	tooLong := append(append([]float64(nil), X[0]...), 0.0)
+	if _, err := loaded.ShapValuesSingle(tooLong); err != ErrFeatureCountMismatch {
+		t.Errorf("ShapValuesSingle with long input: got err=%v, want ErrFeatureCountMismatch", err)
+	}
+}
+
+// TestSaveLoadClassifierShapRoundTrip exercises the same round-trip for a
+// logloss model, since classification routes through a different loss
+// initialization path in fromExported.
+func TestSaveLoadClassifierShapRoundTrip(t *testing.T) {
+	X := [][]float64{
+		{1.0, 2.0, 0.5},
+		{2.0, 1.0, 1.5},
+		{3.0, 3.0, 2.5},
+		{4.0, 2.0, 3.5},
+		{6.0, 1.0, 4.5},
+		{7.0, 3.0, 5.5},
+		{8.0, 2.0, 6.5},
+		{9.0, 1.0, 7.5},
+	}
+	y := []float64{0, 0, 0, 0, 1, 1, 1, 1}
+
+	cfg := Config{
+		NEstimators:    20,
+		LearningRate:   0.1,
+		MaxDepth:       3,
+		MinSamplesLeaf: 1,
+		SubsampleRatio: 1.0,
+		Loss:           "logloss",
+		Seed:           42,
+	}
+
+	original := New(cfg)
+	if err := original.Fit(X, y); err != nil {
+		t.Fatalf("Fit: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "model.json")
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if loaded.numFeatures != len(X[0]) {
+		t.Errorf("numFeatures: got %d, want %d", loaded.numFeatures, len(X[0]))
+	}
+
+	orig, err := original.ShapValues(X)
+	if err != nil {
+		t.Fatalf("original ShapValues: %v", err)
+	}
+	got, err := loaded.ShapValues(X)
+	if err != nil {
+		t.Fatalf("loaded ShapValues: %v", err)
+	}
+
+	for i := range orig {
+		for j := range orig[i] {
+			if math.Abs(orig[i][j]-got[i][j]) > 1e-10 {
+				t.Errorf("shap[%d][%d]: original=%v, loaded=%v", i, j, orig[i][j], got[i][j])
+			}
 		}
 	}
 }
